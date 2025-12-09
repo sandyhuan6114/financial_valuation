@@ -670,6 +670,7 @@
         totalCumulative: null,
         amortization: null,
       };
+      let allPageOcrResults = []; // Store full OCR results with coordinates
 
       // Keywords for searching (IMPROVED)
       const KEYWORDS = {
@@ -801,9 +802,7 @@
           );
           console.log("預計需要 5-10 秒，請稍候...");
 
-          const {
-            data: { text },
-          } = await Tesseract.recognize(canvas, "chi_tra+eng", {
+          const ocrResult = await Tesseract.recognize(canvas, "chi_tra+eng", {
             logger: (progress) => {
               if (progress.status === "recognizing text") {
                 console.log(
@@ -815,8 +814,19 @@
             },
           });
 
-          console.log(`第 ${pageNum} 頁 OCR 完成！提取了 ${text.length} 字元`);
-          allOcrText += `\n=== 第 ${pageNum} 頁 ===\n` + text + "\n";
+          const { data } = ocrResult;
+          console.log(
+            `第 ${pageNum} 頁 OCR 完成！提取了 ${data.text.length} 字元`
+          );
+
+          // Store full OCR result with coordinates
+          allPageOcrResults.push({
+            pageNum: pageNum,
+            data: data,
+            canvas: canvas,
+          });
+
+          allOcrText += `\n=== 第 ${pageNum} 頁 ===\n` + data.text + "\n";
         }
 
         console.log("\n=== 所有頁面 OCR 識別完成！ ===");
@@ -849,7 +859,7 @@
         updateExtractedDataUI();
       }
 
-      // Search for keyword and extract number from OCR text (POSITION-BASED)
+      // Search for keyword and extract number from OCR text (POSITION-BASED with BBOX)
       function searchKeywordInOCRText(text, keywords, fieldName) {
         console.log(`\n搜尋 ${fieldName}，關鍵字:`, keywords);
 
@@ -938,11 +948,15 @@
                 }
 
                 if (selectedNumber) {
+                  // Find bbox coordinates from OCR word data
+                  const bbox = findBboxForValue(selectedNumber, keyword);
+
                   return {
                     value: selectedNumber,
                     keyword: keyword,
                     foundText: lines[i],
                     lineNumber: i + 1,
+                    bbox: bbox, // Include bbox coordinates
                   };
                 }
               }
@@ -957,6 +971,58 @@
         return null;
       }
 
+      // Find bounding box coordinates for a value from OCR word data
+      function findBboxForValue(targetValue, keyword) {
+        console.log(`  → 搜尋數值 ${targetValue.toLocaleString()} 的座標...`);
+
+        // Search through all pages' OCR results
+        for (let pageResult of allPageOcrResults) {
+          const words = pageResult.data.words;
+          const pageNum = pageResult.pageNum;
+
+          // First, find the keyword
+          let keywordIndex = -1;
+          for (let i = 0; i < words.length; i++) {
+            const wordText = words[i].text.replace(/\s+/g, "");
+            const normalizedKeyword = keyword.replace(/\s+/g, "");
+            if (wordText.includes(normalizedKeyword)) {
+              keywordIndex = i;
+              console.log(
+                `    找到關鍵字 "${keyword}" 在第 ${pageNum} 頁，索引 ${i}`
+              );
+              break;
+            }
+          }
+
+          if (keywordIndex >= 0) {
+            // Search for the target value near the keyword (next 20 words)
+            for (
+              let i = keywordIndex;
+              i < Math.min(keywordIndex + 20, words.length);
+              i++
+            ) {
+              const wordText = words[i].text;
+              const num = extractNumber(wordText);
+
+              if (num === targetValue) {
+                const bbox = words[i].bbox;
+                console.log(`    ✓ 找到匹配數值的座標:`, bbox);
+                return {
+                  x0: bbox.x0,
+                  y0: bbox.y0,
+                  x1: bbox.x1,
+                  y1: bbox.y1,
+                  pageNum: pageNum,
+                };
+              }
+            }
+          }
+        }
+
+        console.log(`    ✗ 未找到數值的精確座標`);
+        return null;
+      }
+
       // Render PDF with OCR highlights (ALL PAGES)
       async function renderPDFWithOCRHighlights(
         pdfDocument,
@@ -966,7 +1032,9 @@
         const container = document.getElementById("pdfCanvasContainer");
         container.innerHTML = ""; // Clear
 
-        const scale = 1.5; // Display scale
+        const displayScale = 1.5; // Display scale
+        const ocrScale = 2.5; // OCR scale (used when capturing text)
+        const scaleFactor = displayScale / ocrScale; // Coordinate conversion factor
 
         // Render each page
         for (let pageIndex = 0; pageIndex < allCanvases.length; pageIndex++) {
@@ -991,7 +1059,7 @@
           // Get PDF page
           const page = await pdfDocument.getPage(pageNum);
 
-          const viewport = page.getViewport({ scale });
+          const viewport = page.getViewport({ scale: displayScale });
 
           const canvas = document.createElement("canvas");
           canvas.className = "pdf-preview";
@@ -1021,25 +1089,47 @@
           ];
 
           foundItems.forEach((item) => {
-            if (item.data && item.data.foundText) {
-              // Simple highlighting - draw attention box at top
-              const boxHeight = 60;
-              const boxWidth = 500;
-              const yOffset = item.label === "總累計值" ? 80 : 160;
+            if (
+              item.data &&
+              item.data.bbox &&
+              item.data.bbox.pageNum === pageNum
+            ) {
+              const bbox = item.data.bbox;
 
+              // Convert OCR coordinates to display coordinates
+              const x = bbox.x0 * scaleFactor;
+              const y = bbox.y0 * scaleFactor;
+              const width = (bbox.x1 - bbox.x0) * scaleFactor;
+              const height = (bbox.y1 - bbox.y0) * scaleFactor;
+
+              // Add padding to make box more visible
+              const padding = 5;
+              const boxX = x - padding;
+              const boxY = y - padding;
+              const boxWidth = width + padding * 2;
+              const boxHeight = height + padding * 2;
+
+              // Draw bounding box
               ctx.strokeStyle = item.color;
               ctx.lineWidth = 4;
               ctx.setLineDash([10, 5]);
-              ctx.strokeRect(50, yOffset, boxWidth, boxHeight);
+              ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
               ctx.setLineDash([]);
 
-              // Draw label
+              // Draw label above the box
               ctx.fillStyle = item.color;
               ctx.font = "bold 18px Arial";
               const labelText = `✓ ${
                 item.label
               }: ${item.data.value.toLocaleString()}`;
-              ctx.fillText(labelText, 60, yOffset - 10);
+              ctx.fillText(labelText, boxX, boxY - 10);
+
+              console.log(`在第 ${pageNum} 頁繪製 ${item.label} 的邊界框:`, {
+                x: boxX,
+                y: boxY,
+                width: boxWidth,
+                height: boxHeight,
+              });
             }
           });
 
