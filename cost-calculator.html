@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>成本計算軟體</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary-color: #4f46e5;
+        --primary-hover: #4338ca;
+        --bg-color: #f3f4f6;
+        --card-bg: #ffffff;
+        --text-color: #1f2937;
+        --text-secondary: #6b7280;
+        --border-color: #e5e7eb;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        min-height: 100vh;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 800px;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+
+      header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        color: var(--primary-color);
+      }
+
+      header p {
+        color: var(--text-secondary);
+      }
+
+      .card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        margin-bottom: 24px;
+      }
+
+      h2 {
+        margin-top: 0;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      input[type="number"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 1rem;
+        box-sizing: border-box;
+      }
+
+      button {
+        width: 100%;
+        background-color: var(--primary-color);
+        color: white;
+        padding: 12px;
+        border: none;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      button:hover {
+        background-color: var(--primary-hover);
+      }
+
+      button:disabled {
+        background-color: var(--text-secondary);
+        cursor: not-allowed;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .step-card {
+        background: #f9fafb;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        position: relative;
+      }
+
+      .step-number {
+        position: absolute;
+        top: -10px;
+        left: -10px;
+        background: var(--primary-color);
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+      }
+
+      .step-title {
+        font-weight: 700;
+        margin-bottom: 8px;
+        margin-left: 10px;
+      }
+
+      .step-desc {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+        margin-left: 10px;
+      }
+
+      .step-math {
+        background: #e0e7ff;
+        padding: 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: 600;
+        margin-left: 10px;
+      }
+
+      .final-result {
+        text-align: center;
+        margin-top: 30px;
+        font-size: 1.5rem;
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>成本計算軟體</h1>
+        <p>輸入參數以計算請款金額</p>
+      </header>
+
+      <main>
+        <div class="card input-section">
+          <h2>輸入資料</h2>
+          <form id="calcForm">
+            <div class="form-group">
+              <label for="totalCumulative">總累計值</label>
+              <input
+                type="number"
+                id="totalCumulative"
+                required
+                placeholder="請輸入總累計值"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="financeDeduction">財務部提供扣除金額</label>
+              <input type="number" id="financeDeduction" value="0" required />
+            </div>
+
+            <div class="form-group">
+              <label for="amortization">各項攤提金額</label>
+              <input type="number" id="amortization" value="0" required />
+            </div>
+
+            <div class="form-group">
+              <label for="mgmtFee">管理費 % 數</label>
+              <input type="number" id="mgmtFee" value="5" step="0.1" required />
+            </div>
+
+            <div class="form-group">
+              <label for="taxPercent">稅務金額 % 數</label>
+              <input
+                type="number"
+                id="taxPercent"
+                value="5"
+                step="0.1"
+                required
+              />
+            </div>
+
+            <button type="submit" id="submitBtn">開始計算</button>
+          </form>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+          <h2>計算結果</h2>
+          <div id="stepsContainer">
+            <!-- Steps will be injected here -->
+          </div>
+          <div class="final-result">
+            <h3>最終請款金額: <span id="finalAmount">-</span></h3>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // 計算邏輯 - 從 Python utils.py 轉換而來
+      function calculateSteps(
+        totalCumulative,
+        financeDeduction,
+        managementFeePercent,
+        amortization,
+        taxPercent
+      ) {
+        const steps = [];
+
+        // Step 1: 初始值
+        steps.push({
+          step: 1,
+          title: "初始值 (總累計值)",
+          description: "輸入的總累計值",
+          math: totalCumulative.toLocaleString(),
+          result: totalCumulative,
+        });
+
+        // Step 2: 扣除財務部提供扣除金額
+        const step2Res = totalCumulative - financeDeduction;
+        steps.push({
+          step: 2,
+          title: "扣除 財務部提供扣除金額",
+          description: `扣除輸入的金額: ${financeDeduction.toLocaleString()}`,
+          math: `${totalCumulative.toLocaleString()} - ${financeDeduction.toLocaleString()} = ${step2Res.toLocaleString()}`,
+          result: step2Res,
+        });
+
+        // Step 3: 加上管理費
+        const mgmtFee = step2Res * (managementFeePercent / 100);
+        const mgmtFeeRounded = Math.round(mgmtFee);
+        const step3Res = step2Res + mgmtFeeRounded;
+        steps.push({
+          step: 3,
+          title: "加上 管理費",
+          description: `加上 ${managementFeePercent}% 管理費`,
+          math: `${step2Res.toLocaleString()} * ${managementFeePercent}% ≈ ${mgmtFeeRounded.toLocaleString()} (加總: ${step3Res.toLocaleString()})`,
+          result: step3Res,
+        });
+
+        // Step 4: 扣除各項攤提
+        const step4Res = step3Res - amortization;
+        steps.push({
+          step: 4,
+          title: "扣除 各項攤提",
+          description: `扣除輸入的各項攤提: ${amortization.toLocaleString()}`,
+          math: `${step3Res.toLocaleString()} - ${amortization.toLocaleString()} = ${step4Res.toLocaleString()}`,
+          result: step4Res,
+        });
+
+        // Step 5: 加上營業稅
+        const tax = step4Res * (taxPercent / 100);
+        const taxRounded = Math.round(tax);
+        const step5Res = step4Res + taxRounded;
+        steps.push({
+          step: 5,
+          title: "加上 營業稅 (最終結果)",
+          description: `加上 ${taxPercent}% 營業稅`,
+          math: `${step4Res.toLocaleString()} * ${taxPercent}% ≈ ${taxRounded.toLocaleString()} (最終: ${step5Res.toLocaleString()})`,
+          result: step5Res,
+        });
+
+        return steps;
+      }
+
+      // 顯示結果
+      function displayResults(data) {
+        const resultsSection = document.getElementById("resultsSection");
+        const stepsContainer = document.getElementById("stepsContainer");
+        const finalAmount = document.getElementById("finalAmount");
+
+        stepsContainer.innerHTML = "";
+        resultsSection.classList.remove("hidden");
+
+        data.steps.forEach((step) => {
+          const stepDiv = document.createElement("div");
+          stepDiv.className = "step-card";
+          stepDiv.innerHTML = `
+            <div class="step-number">${step.step}</div>
+            <div class="step-title">${step.title}</div>
+            <div class="step-desc">${step.description}</div>
+            <div class="step-math">${step.math}</div>
+          `;
+          stepsContainer.appendChild(stepDiv);
+        });
+
+        const lastStep = data.steps[data.steps.length - 1];
+        finalAmount.textContent = lastStep.result.toLocaleString();
+      }
+
+      // 表單提交處理
+      document.getElementById("calcForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.textContent = "計算中...";
+        submitBtn.disabled = true;
+
+        // 獲取表單數據
+        const totalCumulative = parseInt(
+          document.getElementById("totalCumulative").value
+        );
+        const financeDeduction = parseInt(
+          document.getElementById("financeDeduction").value
+        );
+        const amortization = parseInt(
+          document.getElementById("amortization").value
+        );
+        const mgmtFeePercent = parseFloat(
+          document.getElementById("mgmtFee").value
+        );
+        const taxPercent = parseFloat(
+          document.getElementById("taxPercent").value
+        );
+
+        // 執行計算
+        try {
+          const steps = calculateSteps(
+            totalCumulative,
+            financeDeduction,
+            mgmtFeePercent,
+            amortization,
+            taxPercent
+          );
+
+          displayResults({ steps });
+        } catch (error) {
+          alert("發生錯誤: " + error.message);
+        } finally {
+          submitBtn.textContent = "開始計算";
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
