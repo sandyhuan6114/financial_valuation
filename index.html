@@ -902,53 +902,8 @@
                   console.log(
                     `  ✓ 總累計值: 取最大數字 = ${selectedNumber.toLocaleString()}`
                   );
-                } else if (isAmortization) {
-                  // For amortization, filter by range and apply OCR correction
-                  const candidates = lineNumbers.filter(
-                    (n) => n >= 1000000 && n <= 50000000
-                  );
 
-                  if (candidates.length > 0) {
-                    console.log(
-                      `  → 候選數字 (1M-50M):`,
-                      candidates.map((n) => n.toLocaleString())
-                    );
-
-                    // Check for OCR error: if number is 10x too large, divide by 10
-                    const correctedCandidates = candidates.map((n) => {
-                      if (
-                        n > 10000000 &&
-                        n / 10 >= 1000000 &&
-                        n / 10 <= 10000000
-                      ) {
-                        console.log(
-                          `  → OCR 錯誤修正: ${n.toLocaleString()} ÷ 10 = ${(
-                            n / 10
-                          ).toLocaleString()}`
-                        );
-                        return n / 10;
-                      }
-                      return n;
-                    });
-
-                    // Take number closest to 4M
-                    const target = 4000000;
-                    selectedNumber = correctedCandidates.reduce((prev, curr) =>
-                      Math.abs(curr - target) < Math.abs(prev - target)
-                        ? curr
-                        : prev
-                    );
-
-                    console.log(
-                      `  ✓ 各項攤提: 選擇最接近 4M 的數字 = ${selectedNumber.toLocaleString()}`
-                    );
-                  } else {
-                    console.log(`  ✗ 找不到 1M-50M 範圍內的數字`);
-                  }
-                }
-
-                if (selectedNumber) {
-                  // Find bbox coordinates from OCR word data
+                  // Find bbox using the selected value
                   const bbox = findBboxForValue(selectedNumber, keyword);
 
                   return {
@@ -956,9 +911,92 @@
                     keyword: keyword,
                     foundText: lines[i],
                     lineNumber: i + 1,
-                    bbox: bbox, // Include bbox coordinates
+                    bbox: bbox,
                   };
+                } else if (isAmortization) {
+                  // For amortization, we need the "累計金額" (cumulative amount)
+                  // Table structure: 各項攤提 | 期初金額 | 本期投入 | 累計金額
+                  // The cumulative amount is typically the LARGEST number in the row
+
+                  console.log(
+                    `  → 該行所有數字:`,
+                    lineNumbers.map((n) => n.toLocaleString())
+                  );
+
+                  // Track both original and corrected values for bbox matching
+                  const numberMapping = [];
+
+                  lineNumbers.forEach((n) => {
+                    let corrected = n;
+                    let correctionType = "none";
+
+                    // OCR Error Type 1: First digit doubled (44,347,050 → 4,347,050)
+                    const str = n.toString();
+                    if (str.length >= 8 && str[0] === str[1]) {
+                      corrected = parseInt(str.substring(1));
+                      correctionType = "remove_first_digit";
+                      console.log(
+                        `  → OCR 錯誤修正（去除重複首位）: ${n.toLocaleString()} → ${corrected.toLocaleString()}`
+                      );
+                    }
+                    // OCR Error Type 2: Number is 10x too large
+                    else if (n > 10000000) {
+                      // Only apply if number is clearly too large
+                      corrected = n / 10;
+                      correctionType = "divide_by_10";
+                      console.log(
+                        `  → OCR 錯誤修正（除以 10）: ${n.toLocaleString()} ÷ 10 = ${corrected.toLocaleString()}`
+                      );
+                    }
+
+                    numberMapping.push({
+                      original: n,
+                      corrected: corrected,
+                      type: correctionType,
+                    });
+                  });
+
+                  const correctedNumbers = numberMapping.map(
+                    (m) => m.corrected
+                  );
+                  console.log(
+                    `  → 修正後的數字:`,
+                    correctedNumbers.map((n) => n.toLocaleString())
+                  );
+
+                  // NO RANGE FILTER - select the largest corrected number
+                  if (correctedNumbers.length > 0) {
+                    selectedNumber = Math.max(...correctedNumbers);
+
+                    // Find the original value for bbox matching
+                    const mapping = numberMapping.find(
+                      (m) => m.corrected === selectedNumber
+                    );
+                    const originalNumber = mapping
+                      ? mapping.original
+                      : selectedNumber; // Fallback to corrected if no mapping found (shouldn't happen)
+
+                    console.log(
+                      `  ✓ 各項攤提: 選擇最大數字（累計金額）= ${selectedNumber.toLocaleString()}`
+                    );
+                    console.log(
+                      `  → 對應的 OCR 原始值 = ${originalNumber.toLocaleString()}`
+                    );
+
+                    // Find bbox using ORIGINAL value (before correction)
+                    bbox = findBboxForValue(originalNumber, keyword);
+
+                    return {
+                      value: selectedNumber, // Use corrected value for display
+                      keyword: keyword,
+                      foundText: lines[i],
+                      lineNumber: i + 1,
+                      bbox: bbox,
+                    };
+                  }
                 }
+
+                // Note: bbox finding is now handled within each branch above
               }
 
               console.log(`  ✗ 該行沒有找到有效數字`);
@@ -974,39 +1012,46 @@
       // Find bounding box coordinates for a value from OCR word data
       function findBboxForValue(targetValue, keyword) {
         console.log(`  → 搜尋數值 ${targetValue.toLocaleString()} 的座標...`);
+        console.log(
+          `     關鍵字: "${keyword}"（注意：將直接掃描所有詞，不依賴關鍵字）`
+        );
 
-        // Search through all pages' OCR results
+        // NEW APPROACH: Scan ALL words directly for the target number
+        // Because keywords may be split into individual characters in OCR
+
         for (let pageResult of allPageOcrResults) {
           const words = pageResult.data.words;
           const pageNum = pageResult.pageNum;
 
-          // First, find the keyword
-          let keywordIndex = -1;
+          console.log(
+            `     掃描第 ${pageNum} 頁的所有 ${words.length} 個詞...`
+          );
+
+          // Scan every word for the target value
           for (let i = 0; i < words.length; i++) {
-            const wordText = words[i].text.replace(/\s+/g, "");
-            const normalizedKeyword = keyword.replace(/\s+/g, "");
-            if (wordText.includes(normalizedKeyword)) {
-              keywordIndex = i;
-              console.log(
-                `    找到關鍵字 "${keyword}" 在第 ${pageNum} 頁，索引 ${i}`
-              );
-              break;
-            }
-          }
+            const wordText = words[i].text;
+            const num = extractNumber(wordText);
 
-          if (keywordIndex >= 0) {
-            // Search for the target value near the keyword (next 20 words)
-            for (
-              let i = keywordIndex;
-              i < Math.min(keywordIndex + 20, words.length);
-              i++
-            ) {
-              const wordText = words[i].text;
-              const num = extractNumber(wordText);
+            if (num !== null) {
+              // Fuzzy matching: support values that may have been corrected
+              const isMatch =
+                num === targetValue ||
+                num === targetValue * 10 ||
+                num === targetValue / 10 ||
+                Math.abs(num - targetValue) < 100; // Allow small rounding errors
 
-              if (num === targetValue) {
+              if (isMatch) {
                 const bbox = words[i].bbox;
-                console.log(`    ✓ 找到匹配數值的座標:`, bbox);
+                console.log(`    ✓✓✓ 找到匹配數值！`);
+                console.log(`        詞文本: "${wordText}"`);
+                console.log(`        詞索引: ${i}`);
+                console.log(`        目標值: ${targetValue.toLocaleString()}`);
+                console.log(`        OCR 值: ${num.toLocaleString()}`);
+                console.log(
+                  `        座標: x0=${bbox.x0}, y0=${bbox.y0}, x1=${bbox.x1}, y1=${bbox.y1}`
+                );
+                console.log(`        頁數: ${pageNum}`);
+
                 return {
                   x0: bbox.x0,
                   y0: bbox.y0,
@@ -1019,7 +1064,7 @@
           }
         }
 
-        console.log(`    ✗ 未找到數值的精確座標`);
+        console.log(`    ✗✗✗ 未找到數值的座標（已搜尋所有頁面的所有詞）`);
         return null;
       }
 
@@ -1096,11 +1141,20 @@
             ) {
               const bbox = item.data.bbox;
 
+              console.log(`\n=== 準備繪製紅框: ${item.label} ===`);
+              console.log(`  原始 OCR 座標 (scale=${ocrScale}):`, bbox);
+              console.log(`  顯示 scale: ${displayScale}`);
+              console.log(`  轉換係數: ${scaleFactor}`);
+
               // Convert OCR coordinates to display coordinates
               const x = bbox.x0 * scaleFactor;
               const y = bbox.y0 * scaleFactor;
               const width = (bbox.x1 - bbox.x0) * scaleFactor;
               const height = (bbox.y1 - bbox.y0) * scaleFactor;
+
+              console.log(
+                `  轉換後座標: x=${x}, y=${y}, width=${width}, height=${height}`
+              );
 
               // Add padding to make box more visible
               const padding = 5;
@@ -1108,6 +1162,10 @@
               const boxY = y - padding;
               const boxWidth = width + padding * 2;
               const boxHeight = height + padding * 2;
+
+              console.log(
+                `  加上邊距後: x=${boxX}, y=${boxY}, width=${boxWidth}, height=${boxHeight}`
+              );
 
               // Draw bounding box
               ctx.strokeStyle = item.color;
@@ -1124,12 +1182,11 @@
               }: ${item.data.value.toLocaleString()}`;
               ctx.fillText(labelText, boxX, boxY - 10);
 
-              console.log(`在第 ${pageNum} 頁繪製 ${item.label} 的邊界框:`, {
-                x: boxX,
-                y: boxY,
-                width: boxWidth,
-                height: boxHeight,
-              });
+              console.log(
+                `  ✓✓✓ 在第 ${pageNum} 頁成功繪製 ${item.label} 的邊界框`
+              );
+            } else if (item.data && !item.data.bbox) {
+              console.log(`\n⚠️ ${item.label} 有數值但沒有座標資訊`);
             }
           });
 
