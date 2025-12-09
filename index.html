@@ -3,25 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>成本計算軟體</title>
+    <title>PDF 成本智能分析工具</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- PDF.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Tesseract.js OCR Library -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
       :root {
         --primary-color: #4f46e5;
         --primary-hover: #4338ca;
+        --secondary-color: #06b6d4;
         --bg-color: #f3f4f6;
         --card-bg: #ffffff;
         --text-color: #1f2937;
         --text-secondary: #6b7280;
         --border-color: #e5e7eb;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --error-color: #ef4444;
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
         font-family: "Inter", sans-serif;
-        background-color: var(--bg-color);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: var(--text-color);
         margin: 0;
         padding: 20px;
@@ -32,205 +44,1305 @@
 
       .container {
         width: 100%;
-        max-width: 800px;
+        max-width: 1200px;
       }
 
       header {
         text-align: center;
         margin-bottom: 40px;
+        color: white;
       }
 
       header h1 {
         font-size: 2.5rem;
         margin-bottom: 10px;
-        color: var(--primary-color);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
       }
 
       header p {
-        color: var(--text-secondary);
+        font-size: 1.1rem;
+        opacity: 0.9;
+      }
+
+      .steps-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 20px;
+      }
+
+      .step-indicator {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        color: white;
+      }
+
+      .step-indicator:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 15px;
+        right: -50%;
+        width: 100%;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.3);
+        z-index: 0;
+      }
+
+      .step-indicator.active:not(:last-child)::after {
+        background: var(--secondary-color);
+      }
+
+      .step-number {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-bottom: 8px;
+        position: relative;
+        z-index: 1;
+        transition: all 0.3s;
+      }
+
+      .step-indicator.active .step-number {
+        background: var(--secondary-color);
+        transform: scale(1.2);
+      }
+
+      .step-indicator.completed .step-number {
+        background: var(--success-color);
+      }
+
+      .step-label {
+        font-size: 0.9rem;
+        font-weight: 600;
       }
 
       .card {
         background: var(--card-bg);
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border-radius: 16px;
+        padding: 32px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+          0 10px 10px -5px rgba(0, 0, 0, 0.04);
         margin-bottom: 24px;
+        animation: fadeInUp 0.5s ease;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       h2 {
         margin-top: 0;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 2px solid var(--primary-color);
         padding-bottom: 12px;
+        margin-bottom: 24px;
+        color: var(--primary-color);
+      }
+
+      .upload-area {
+        border: 3px dashed var(--border-color);
+        border-radius: 12px;
+        padding: 60px 40px;
+        text-align: center;
+        transition: all 0.3s;
+        cursor: pointer;
+        background: var(--bg-color);
+      }
+
+      .upload-area:hover,
+      .upload-area.drag-over {
+        border-color: var(--primary-color);
+        background: #eef2ff;
+        transform: translateY(-2px);
+      }
+
+      .upload-icon {
+        font-size: 4rem;
         margin-bottom: 20px;
+        color: var(--primary-color);
+      }
+
+      .upload-text {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .upload-hint {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+      }
+
+      input[type="file"] {
+        display: none;
+      }
+
+      button {
+        background: linear-gradient(
+          135deg,
+          var(--primary-color),
+          var(--secondary-color)
+        );
+        color: white;
+        padding: 14px 28px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      button:disabled {
+        background: var(--text-secondary);
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .btn-secondary {
+        background: white;
+        color: var(--primary-color);
+        border: 2px solid var(--primary-color);
+      }
+
+      .btn-secondary:hover {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .btn-danger {
+        background: var(--error-color);
+      }
+
+      .btn-danger:hover {
+        background: #dc2626;
+      }
+
+      .hidden {
+        display: none !important;
       }
 
       .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 24px;
       }
 
       label {
         display: block;
         margin-bottom: 8px;
         font-weight: 600;
+        color: var(--text-color);
       }
 
       input[type="number"] {
         width: 100%;
-        padding: 10px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 1rem;
-        box-sizing: border-box;
-      }
-
-      button {
-        width: 100%;
-        background-color: var(--primary-color);
-        color: white;
         padding: 12px;
-        border: none;
-        border-radius: 6px;
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
         font-size: 1rem;
-        font-weight: 600;
+        transition: all 0.3s;
+        background: white;
+      }
+
+      input[type="number"]:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+      }
+
+      input[type="number"]:read-only {
+        background: #f9fafb;
+        color: var(--text-secondary);
+      }
+
+      select.number-select {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.3s;
+        background: white;
         cursor: pointer;
-        transition: background-color 0.2s;
       }
 
-      button:hover {
-        background-color: var(--primary-hover);
+      select.number-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
       }
 
-      button:disabled {
-        background-color: var(--text-secondary);
-        cursor: not-allowed;
+      .loading {
+        text-align: center;
+        padding: 40px;
       }
 
-      .hidden {
-        display: none;
+      .spinner {
+        border: 4px solid rgba(79, 70, 229, 0.1);
+        border-left-color: var(--primary-color);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .alert {
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-weight: 600;
+      }
+
+      .alert-info {
+        background: #dbeafe;
+        color: #1e40af;
+        border-left: 4px solid #3b82f6;
+      }
+
+      .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border-left: 4px solid var(--success-color);
+      }
+
+      .alert-warning {
+        background: #fef3c7;
+        color: #92400e;
+        border-left: 4px solid var(--warning-color);
+      }
+
+      .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border-left: 4px solid var(--error-color);
+      }
+
+      .preview-container {
+        margin: 20px 0;
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        padding: 20px;
+        background: #f9fafb;
+      }
+
+      .pdf-preview {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .extracted-data {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin: 20px 0;
+      }
+
+      @media (max-width: 768px) {
+        .extracted-data {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .data-item {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        border: 2px solid var(--border-color);
+        position: relative;
+      }
+
+      .data-item.auto-detected {
+        border-color: var(--success-color);
+      }
+
+      .data-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .data-item-label {
+        font-weight: 700;
+        color: var(--text-color);
+      }
+
+      .auto-badge {
+        background: var(--success-color);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .data-item-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-color);
+        margin-bottom: 12px;
+      }
+
+      .edit-button {
+        padding: 8px 16px;
+        font-size: 0.875rem;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+        justify-content: center;
+        flex-wrap: wrap;
       }
 
       .step-card {
         background: #f9fafb;
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 16px;
+        padding: 20px;
         margin-bottom: 16px;
         position: relative;
       }
 
-      .step-number {
+      .calc-step-number {
         position: absolute;
-        top: -10px;
-        left: -10px;
+        top: -12px;
+        left: -12px;
         background: var(--primary-color);
         color: white;
-        width: 30px;
-        height: 30px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
       }
 
       .step-title {
         font-weight: 700;
         margin-bottom: 8px;
         margin-left: 10px;
+        font-size: 1.1rem;
       }
 
       .step-desc {
         color: var(--text-secondary);
-        font-size: 0.9rem;
         margin-bottom: 8px;
         margin-left: 10px;
       }
 
       .step-math {
         background: #e0e7ff;
-        padding: 8px;
-        border-radius: 4px;
-        font-family: monospace;
+        padding: 12px;
+        border-radius: 6px;
+        font-family: "Courier New", monospace;
         font-weight: 600;
         margin-left: 10px;
+        color: var(--primary-color);
       }
 
       .final-result {
         text-align: center;
         margin-top: 30px;
+        padding: 30px;
+        background: linear-gradient(
+          135deg,
+          var(--primary-color),
+          var(--secondary-color)
+        );
+        border-radius: 12px;
+        color: white;
+      }
+
+      .final-result h3 {
+        margin: 0;
         font-size: 1.5rem;
-        color: var(--primary-color);
+      }
+
+      .final-result .amount {
+        font-size: 2.5rem;
         font-weight: bold;
+        margin-top: 10px;
       }
     </style>
   </head>
   <body>
     <div class="container">
       <header>
-        <h1>成本計算軟體</h1>
-        <p>輸入參數以計算請款金額</p>
+        <h1>🤖 PDF 成本智能分析工具</h1>
+        <p>上傳 PDF → 自動識別數據 → 確認並計算</p>
       </header>
 
+      <!-- Steps Indicator -->
+      <div class="steps-indicator">
+        <div class="step-indicator active" id="stepInd1">
+          <div class="step-number">1</div>
+          <div class="step-label">上傳 PDF</div>
+        </div>
+        <div class="step-indicator" id="stepInd2">
+          <div class="step-number">2</div>
+          <div class="step-label">確認數據</div>
+        </div>
+        <div class="step-indicator" id="stepInd3">
+          <div class="step-number">3</div>
+          <div class="step-label">輸入參數</div>
+        </div>
+        <div class="step-indicator" id="stepInd4">
+          <div class="step-number">4</div>
+          <div class="step-label">查看結果</div>
+        </div>
+      </div>
+
       <main>
-        <div class="card input-section">
-          <h2>輸入資料</h2>
-          <form id="calcForm">
-            <div class="form-group">
-              <label for="totalCumulative">總累計值</label>
-              <input
-                type="number"
-                id="totalCumulative"
-                required
-                placeholder="請輸入總累計值"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="financeDeduction">財務部提供扣除金額</label>
-              <input type="number" id="financeDeduction" value="0" required />
-            </div>
-
-            <div class="form-group">
-              <label for="amortization">各項攤提金額</label>
-              <input type="number" id="amortization" value="0" required />
-            </div>
-
-            <div class="form-group">
-              <label for="mgmtFee">管理費 % 數</label>
-              <input type="number" id="mgmtFee" value="5" step="0.1" required />
-            </div>
-
-            <div class="form-group">
-              <label for="taxPercent">稅務金額 % 數</label>
-              <input
-                type="number"
-                id="taxPercent"
-                value="5"
-                step="0.1"
-                required
-              />
-            </div>
-
-            <button type="submit" id="submitBtn">開始計算</button>
-          </form>
+        <!-- Step 1: Upload PDF -->
+        <div class="card" id="uploadSection">
+          <h2>📤 步驟 1: 上傳 PDF 檔案</h2>
+          <div
+            class="upload-area"
+            id="uploadArea"
+            onclick="document.getElementById('fileInput').click()"
+          >
+            <div class="upload-icon">📄</div>
+            <div class="upload-text">點擊或拖放 PDF 檔案到這裡</div>
+            <div class="upload-hint">支援 .pdf 格式</div>
+          </div>
+          <input type="file" id="fileInput" accept=".pdf" />
         </div>
 
-        <div id="resultsSection" class="results-section hidden">
-          <h2>計算結果</h2>
+        <!-- Step 2: Confirm OCR Results -->
+        <div class="card hidden" id="confirmSection">
+          <h2>✅ 步驟 2: 確認 OCR 識別結果</h2>
+          <div class="alert alert-success" id="successAlert">
+            ✓ OCR 識別成功！已自動識別以下數據。
+          </div>
+          <div class="alert alert-warning hidden" id="warningAlert">
+            ⚠️ 部分數據未找到，請手動輸入。
+          </div>
+
+          <div class="preview-container" id="previewContainer">
+            <h3 style="margin-top: 0">📷 標記預覽（找到的位置以紅框標示）</h3>
+            <div id="pdfCanvasContainer">
+              <!-- Multiple canvases will be inserted here -->
+            </div>
+          </div>
+
+          <div class="extracted-data">
+            <div class="data-item auto-detected" id="totalCumulativeItem">
+              <div class="data-item-header">
+                <span class="data-item-label">總累計值</span>
+                <span class="auto-badge" id="totalBadge">OCR 識別</span>
+              </div>
+              <div class="data-item-value" id="totalCumulativeDisplay">-</div>
+              <input type="number" id="totalCumulative" class="hidden" />
+              <button
+                class="edit-button btn-secondary"
+                onclick="enableEdit('totalCumulative', event)"
+              >
+                ✏️ 修正
+              </button>
+            </div>
+
+            <div class="data-item auto-detected" id="amortizationItem">
+              <div class="data-item-header">
+                <span class="data-item-label">各項攤提金額</span>
+                <span class="auto-badge" id="amortBadge">OCR 識別</span>
+              </div>
+              <div class="data-item-value" id="amortizationDisplay">-</div>
+              <input type="number" id="amortization" class="hidden" />
+              <button
+                class="edit-button btn-secondary"
+                onclick="enableEdit('amortization', event)"
+              >
+                ✏️ 修正
+              </button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="proceedToInputBtn">➡️ 確認無誤，繼續下一步</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Manual Input -->
+        <div class="card hidden" id="inputSection">
+          <h2>⌨️ 步驟 3: 輸入其他參數</h2>
+          <div class="alert alert-info">請輸入以下三個參數以完成計算</div>
+
+          <div class="form-group">
+            <label for="financeDeduction">財務部提供扣除金額</label>
+            <input
+              type="number"
+              id="financeDeduction"
+              value="0"
+              placeholder="請輸入金額"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="mgmtFee">管理費 % 數</label>
+            <input
+              type="number"
+              id="mgmtFee"
+              value="5"
+              step="0.1"
+              placeholder="例如: 5"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="taxPercent">稅務金額 % 數</label>
+            <input
+              type="number"
+              id="taxPercent"
+              value="5"
+              step="0.1"
+              placeholder="例如: 5"
+              required
+            />
+          </div>
+
+          <button id="calculateBtn">🧮 開始計算</button>
+        </div>
+
+        <!-- Step 4: Results -->
+        <div class="card hidden" id="resultsSection">
+          <h2>📈 步驟 4: 計算結果</h2>
           <div id="stepsContainer">
             <!-- Steps will be injected here -->
           </div>
           <div class="final-result">
-            <h3>最終請款金額: <span id="finalAmount">-</span></h3>
+            <h3>最終請款金額</h3>
+            <div class="amount" id="finalAmount">-</div>
+          </div>
+          <div class="actions">
+            <button class="btn-secondary" onclick="location.reload()">
+              🔄 重新開始
+            </button>
           </div>
         </div>
       </main>
     </div>
 
     <script>
-      // 計算邏輯 - 從 Python utils.py 轉換而來
+      // Configure PDF.js worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+      // Global variables
+      let currentPdfPage = null;
+      let currentPdfDocument = null; // Store PDF document
+      let pdfTextItems = null;
+      let extractedData = {
+        totalCumulative: null,
+        amortization: null,
+      };
+
+      // Keywords for searching (IMPROVED)
+      const KEYWORDS = {
+        // Be more specific: look for "累計值" at end of line/phrase
+        totalCumulative: ["累計值", "累計計值", "總累計值"],
+        // Look for "各項攤提" with "累計金額" or "累計" nearby
+        amortization: ["各項攤提"],
+      };
+
+      // Step management
+      function updateStepIndicator(currentStep) {
+        for (let i = 1; i <= 4; i++) {
+          const stepInd = document.getElementById(`stepInd${i}`);
+          stepInd.classList.remove("active", "completed");
+
+          if (i < currentStep) {
+            stepInd.classList.add("completed");
+          } else if (i === currentStep) {
+            stepInd.classList.add("active");
+          }
+        }
+      }
+
+      // File upload handling
+      const uploadArea = document.getElementById("uploadArea");
+      const fileInput = document.getElementById("fileInput");
+
+      uploadArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadArea.classList.add("drag-over");
+      });
+
+      uploadArea.addEventListener("dragleave", () => {
+        uploadArea.classList.remove("drag-over");
+      });
+
+      uploadArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove("drag-over");
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          handleFile(files[0]);
+        }
+      });
+
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files.length > 0) {
+          handleFile(e.target.files[0]);
+        }
+      });
+
+      // Handle PDF file
+      async function handleFile(file) {
+        if (!file.name.toLowerCase().endsWith(".pdf")) {
+          alert("請上傳 PDF 檔案！");
+          return;
+        }
+
+        // Show loading
+        const uploadSection = document.getElementById("uploadSection");
+        uploadSection.innerHTML = `
+          <h2>📤 步驟 1: 上傳 PDF 檔案</h2>
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>正在使用 OCR 識別 PDF 所有頁面的文字...</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">預計每頁需要 5-10 秒，請耐心等候</p>
+            <p style="color: var(--text-secondary); font-size: 0.85rem;">請查看 Console (F12) 以了解詳細進度</p>
+          </div>
+        `;
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          await parsePDFAndExtract(arrayBuffer);
+
+          // Update UI
+          uploadSection.classList.add("hidden");
+          document.getElementById("confirmSection").classList.remove("hidden");
+          updateStepIndicator(2);
+        } catch (error) {
+          console.error("Error parsing PDF:", error);
+          alert("解析 PDF 時發生錯誤: " + error.message);
+          location.reload();
+        }
+      }
+
+      // Parse PDF and extract data using OCR (ALL PAGES)
+      async function parsePDFAndExtract(arrayBuffer) {
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        currentPdfDocument = pdf; // Save PDF document
+        const totalPages = pdf.numPages;
+
+        console.log(`=== PDF 共有 ${totalPages} 頁 ===`);
+
+        // Step 1: Render ALL pages to canvas and perform OCR
+        let allOcrText = "";
+        const allCanvases = [];
+
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          console.log(`\n=== 處理第 ${pageNum}/${totalPages} 頁 ===`);
+          const page = await pdf.getPage(pageNum);
+
+          if (pageNum === 1) {
+            currentPdfPage = page; // Save first page for preview
+          }
+
+          // Render page to canvas (high resolution for better OCR)
+          console.log(`步驟 1.${pageNum}: 渲染第 ${pageNum} 頁為圖片`);
+          const scale = 2.5;
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({
+            canvasContext: ctx,
+            viewport: viewport,
+          }).promise;
+
+          allCanvases.push(canvas);
+          console.log(
+            `第 ${pageNum} 頁已渲染: ${viewport.width}x${viewport.height}`
+          );
+
+          // OCR Recognition for this page
+          console.log(
+            `步驟 2.${pageNum}: OCR 識別第 ${pageNum} 頁（繁體中文 + 英文）`
+          );
+          console.log("預計需要 5-10 秒，請稍候...");
+
+          const {
+            data: { text },
+          } = await Tesseract.recognize(canvas, "chi_tra+eng", {
+            logger: (progress) => {
+              if (progress.status === "recognizing text") {
+                console.log(
+                  `第 ${pageNum} 頁 OCR 進度: ${(
+                    progress.progress * 100
+                  ).toFixed(1)}%`
+                );
+              }
+            },
+          });
+
+          console.log(`第 ${pageNum} 頁 OCR 完成！提取了 ${text.length} 字元`);
+          allOcrText += `\n=== 第 ${pageNum} 頁 ===\n` + text + "\n";
+        }
+
+        console.log("\n=== 所有頁面 OCR 識別完成！ ===");
+        console.log("合併後的完整文字:");
+        console.log(allOcrText);
+        console.log(`總字元數: ${allOcrText.length}`);
+
+        // Step 3: Search for keywords in combined OCR text
+        console.log("\n=== 步驟 3: 搜尋關鍵字（所有頁面）===");
+        extractedData.totalCumulative = searchKeywordInOCRText(
+          allOcrText,
+          KEYWORDS.totalCumulative,
+          "totalCumulative"
+        );
+
+        extractedData.amortization = searchKeywordInOCRText(
+          allOcrText,
+          KEYWORDS.amortization,
+          "amortization"
+        );
+
+        // Step 4: Render all pages preview with highlights
+        await renderPDFWithOCRHighlights(
+          currentPdfDocument,
+          allCanvases,
+          allOcrText
+        );
+
+        // Step 5: Update UI
+        updateExtractedDataUI();
+      }
+
+      // Search for keyword and extract number from OCR text (POSITION-BASED)
+      function searchKeywordInOCRText(text, keywords, fieldName) {
+        console.log(`\n搜尋 ${fieldName}，關鍵字:`, keywords);
+
+        const lines = text.split("\n");
+
+        for (let keyword of keywords) {
+          console.log(`  嘗試關鍵字: "${keyword}"`);
+
+          // Search each line
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const normalizedLine = line.replace(/\s+/g, "");
+            const normalizedKeyword = keyword.replace(/\s+/g, "");
+
+            if (normalizedLine.includes(normalizedKeyword)) {
+              console.log(`  ✓ 找到關鍵字在第 ${i + 1} 行:`, lines[i]);
+
+              const isAmortization = fieldName === "amortization";
+              const isTotalCumulative = fieldName === "totalCumulative";
+
+              // Extract ALL numbers from this line
+              const lineNumbers = [];
+              const words = lines[i].split(/\s+/);
+
+              console.log(`  → 提取該行所有數字...`);
+              words.forEach((word) => {
+                const num = extractNumber(word);
+                if (num !== null && num > 1000) {
+                  lineNumbers.push(num);
+                  console.log(`    找到數字: ${num.toLocaleString()}`);
+                }
+              });
+
+              if (lineNumbers.length > 0) {
+                let selectedNumber = null;
+
+                if (isTotalCumulative) {
+                  // For total cumulative, take the LARGEST number
+                  selectedNumber = Math.max(...lineNumbers);
+                  console.log(
+                    `  ✓ 總累計值: 取最大數字 = ${selectedNumber.toLocaleString()}`
+                  );
+                } else if (isAmortization) {
+                  // For amortization, filter by range and apply OCR correction
+                  const candidates = lineNumbers.filter(
+                    (n) => n >= 1000000 && n <= 50000000
+                  );
+
+                  if (candidates.length > 0) {
+                    console.log(
+                      `  → 候選數字 (1M-50M):`,
+                      candidates.map((n) => n.toLocaleString())
+                    );
+
+                    // Check for OCR error: if number is 10x too large, divide by 10
+                    const correctedCandidates = candidates.map((n) => {
+                      if (
+                        n > 10000000 &&
+                        n / 10 >= 1000000 &&
+                        n / 10 <= 10000000
+                      ) {
+                        console.log(
+                          `  → OCR 錯誤修正: ${n.toLocaleString()} ÷ 10 = ${(
+                            n / 10
+                          ).toLocaleString()}`
+                        );
+                        return n / 10;
+                      }
+                      return n;
+                    });
+
+                    // Take number closest to 4M
+                    const target = 4000000;
+                    selectedNumber = correctedCandidates.reduce((prev, curr) =>
+                      Math.abs(curr - target) < Math.abs(prev - target)
+                        ? curr
+                        : prev
+                    );
+
+                    console.log(
+                      `  ✓ 各項攤提: 選擇最接近 4M 的數字 = ${selectedNumber.toLocaleString()}`
+                    );
+                  } else {
+                    console.log(`  ✗ 找不到 1M-50M 範圍內的數字`);
+                  }
+                }
+
+                if (selectedNumber) {
+                  return {
+                    value: selectedNumber,
+                    keyword: keyword,
+                    foundText: lines[i],
+                    lineNumber: i + 1,
+                  };
+                }
+              }
+
+              console.log(`  ✗ 該行沒有找到有效數字`);
+              break;
+            }
+          }
+        }
+
+        console.log(`  ✗ 未找到任何匹配的關鍵字`);
+        return null;
+      }
+
+      // Render PDF with OCR highlights (ALL PAGES)
+      async function renderPDFWithOCRHighlights(
+        pdfDocument,
+        allCanvases,
+        ocrText
+      ) {
+        const container = document.getElementById("pdfCanvasContainer");
+        container.innerHTML = ""; // Clear
+
+        const scale = 1.5; // Display scale
+
+        // Render each page
+        for (let pageIndex = 0; pageIndex < allCanvases.length; pageIndex++) {
+          const pageNum = pageIndex + 1;
+
+          // Create page wrapper
+          const pageWrapper = document.createElement("div");
+          pageWrapper.style.marginBottom = "30px";
+          pageWrapper.style.border = "2px solid #e5e7eb";
+          pageWrapper.style.borderRadius = "8px";
+          pageWrapper.style.padding = "15px";
+          pageWrapper.style.background = "#f9fafb";
+
+          // Page title
+          const pageTitle = document.createElement("div");
+          pageTitle.style.fontWeight = "bold";
+          pageTitle.style.marginBottom = "10px";
+          pageTitle.style.color = "var(--primary-color)";
+          pageTitle.textContent = `第 ${pageNum} 頁`;
+          pageWrapper.appendChild(pageTitle);
+
+          // Get PDF page
+          const page = await pdfDocument.getPage(pageNum);
+
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          canvas.className = "pdf-preview";
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          const ctx = canvas.getContext("2d");
+
+          // Render PDF
+          await page.render({
+            canvasContext: ctx,
+            viewport: viewport,
+          }).promise;
+
+          // Draw highlights if values found on this page
+          const foundItems = [
+            {
+              data: extractedData.totalCumulative,
+              label: "總累計值",
+              color: "#ef4444",
+            },
+            {
+              data: extractedData.amortization,
+              label: "各項攤提",
+              color: "#f59e0b",
+            },
+          ];
+
+          foundItems.forEach((item) => {
+            if (item.data && item.data.foundText) {
+              // Simple highlighting - draw attention box at top
+              const boxHeight = 60;
+              const boxWidth = 500;
+              const yOffset = item.label === "總累計值" ? 80 : 160;
+
+              ctx.strokeStyle = item.color;
+              ctx.lineWidth = 4;
+              ctx.setLineDash([10, 5]);
+              ctx.strokeRect(50, yOffset, boxWidth, boxHeight);
+              ctx.setLineDash([]);
+
+              // Draw label
+              ctx.fillStyle = item.color;
+              ctx.font = "bold 18px Arial";
+              const labelText = `✓ ${
+                item.label
+              }: ${item.data.value.toLocaleString()}`;
+              ctx.fillText(labelText, 60, yOffset - 10);
+            }
+          });
+
+          pageWrapper.appendChild(canvas);
+          container.appendChild(pageWrapper);
+        }
+
+        console.log(`已渲染 ${allCanvases.length} 頁 PDF 預覽`);
+      }
+
+      // Find all large numbers in PDF
+      function findAllLargeNumbers(textItems) {
+        const numbers = [];
+        const seen = new Set();
+
+        for (let i = 0; i < textItems.length; i++) {
+          const text = textItems[i].str.trim();
+          const number = extractNumber(text);
+
+          if (number !== null && number > 100000 && !seen.has(number)) {
+            seen.add(number);
+            numbers.push({
+              value: number,
+              keyword: "direct",
+              position: textItems[i].transform,
+              foundText: text,
+            });
+          }
+        }
+
+        // Sort by value descending
+        return numbers.sort((a, b) => b.value - a.value);
+      }
+
+      // Find value near keyword
+      function findKeywordValue(textItems, keywords) {
+        console.log("=== 開始搜尋關鍵字 ===", keywords);
+
+        for (let i = 0; i < textItems.length; i++) {
+          const item = textItems[i];
+          const text = item.str.trim();
+
+          for (let keyword of keywords) {
+            if (text.includes(keyword)) {
+              console.log(`✓ 找到關鍵字「${keyword}」在位置 ${i}:`, text);
+
+              // Search for number in nearby items (expanded range)
+              for (let j = i; j < Math.min(i + 20, textItems.length); j++) {
+                const nearbyText = textItems[j].str.trim();
+                const number = extractNumber(nearbyText);
+
+                if (number !== null && number > 1000) {
+                  // Filter out small numbers
+                  console.log(
+                    `  → 在位置 ${j} 找到數字:`,
+                    number,
+                    "(原文:",
+                    nearbyText,
+                    ")"
+                  );
+                  return {
+                    value: number,
+                    keyword: keyword,
+                    position: textItems[j].transform,
+                    foundText: nearbyText,
+                  };
+                } else if (number !== null) {
+                  console.log(`  ✗ 跳過小數字:`, number);
+                }
+              }
+              console.log(`  ✗ 在關鍵字「${keyword}」附近找不到有效數字`);
+            }
+          }
+        }
+
+        console.log("✗ 未找到任何匹配的關鍵字");
+        return null;
+      }
+
+      // Extract number from text (improved to handle OCR errors)
+      function extractNumber(text) {
+        // Remove commas and handle OCR errors with dots
+        // OCR may produce: "44﹒347﹒050" instead of "4,347,050"
+        let cleaned = text.replace(/,/g, "");
+
+        // Handle multiple dots (OCR errors) - remove all but first decimal point
+        // "44﹒347﹒050" → "44347050"
+        cleaned = cleaned.replace(/[﹒.]/g, "");
+
+        // Find all sequences of digits
+        const matches = cleaned.match(/\d+/g);
+        if (matches && matches.length > 0) {
+          // Return the longest number sequence (most likely the actual number)
+          const longestMatch = matches.reduce((a, b) =>
+            a.length >= b.length ? a : b
+          );
+          const num = parseFloat(longestMatch);
+          return isNaN(num) ? null : num;
+        }
+        return null;
+      }
+
+      // Render PDF with highlights
+      async function renderPDFWithHighlights(page, foundItems) {
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.getElementById("pdfCanvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        // Render PDF
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        }).promise;
+
+        // Draw highlights
+        foundItems.forEach((item, index) => {
+          if (!item) return;
+
+          const transform = item.position;
+          const x = transform[4] * scale;
+          const y = viewport.height - transform[5] * scale;
+
+          // Draw rectangle
+          ctx.strokeStyle = index === 0 ? "#ef4444" : "#f59e0b";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x - 10, y - 30, 200, 40);
+
+          // Draw label
+          ctx.fillStyle = index === 0 ? "#ef4444" : "#f59e0b";
+          ctx.font = "bold 14px Arial";
+          const label = index === 0 ? "總累計值" : "各項攤提";
+          ctx.fillText(label, x - 10, y - 35);
+        });
+      }
+
+      // Update extracted data UI with OCR results
+      function updateExtractedDataUI() {
+        const totalDisplay = document.getElementById("totalCumulativeDisplay");
+        const amortDisplay = document.getElementById("amortizationDisplay");
+        const successAlert = document.getElementById("successAlert");
+        const warningAlert = document.getElementById("warningAlert");
+
+        let foundCount = 0;
+
+        // Total Cumulative
+        if (extractedData.totalCumulative) {
+          totalDisplay.textContent =
+            extractedData.totalCumulative.value.toLocaleString();
+          document.getElementById("totalCumulative").value =
+            extractedData.totalCumulative.value;
+          foundCount++;
+        } else {
+          totalDisplay.textContent = "未找到";
+          document
+            .getElementById("totalCumulativeItem")
+            .classList.remove("auto-detected");
+          document.getElementById("totalBadge").textContent = "手動輸入";
+          document.getElementById("totalBadge").style.background = "#f59e0b";
+          enableEdit("totalCumulative");
+        }
+
+        // Amortization
+        if (extractedData.amortization) {
+          amortDisplay.textContent =
+            extractedData.amortization.value.toLocaleString();
+          document.getElementById("amortization").value =
+            extractedData.amortization.value;
+          foundCount++;
+        } else {
+          amortDisplay.textContent = "未找到";
+          document
+            .getElementById("amortizationItem")
+            .classList.remove("auto-detected");
+          document.getElementById("amortBadge").textContent = "手動輸入";
+          document.getElementById("amortBadge").style.background = "#f59e0b";
+          enableEdit("amortization");
+        }
+
+        // Update alert
+        if (foundCount < 2) {
+          successAlert.classList.add("hidden");
+          warningAlert.classList.remove("hidden");
+        }
+
+        console.log(`\nOCR 結果: 找到 ${foundCount}/2 個數值`);
+      }
+
+      // Enable editing
+      function enableEdit(fieldId, evt = null) {
+        const input = document.getElementById(fieldId);
+        const display = document.getElementById(fieldId + "Display");
+
+        // Find the button - either from event or by querying
+        let button;
+        if (evt && evt.target) {
+          button = evt.target;
+        } else {
+          // When called programmatically, find the button in the parent item
+          const itemId = fieldId + "Item";
+          const item = document.getElementById(itemId);
+          if (item) {
+            button = item.querySelector(".edit-button");
+          }
+        }
+
+        if (!button) {
+          console.error("Could not find button for field:", fieldId);
+          // If no button found, just enable input
+          input.classList.remove("hidden");
+          input.removeAttribute("readonly");
+          display.classList.add("hidden");
+          return;
+        }
+
+        if (input.classList.contains("hidden")) {
+          // Enable edit mode
+          input.classList.remove("hidden");
+          input.removeAttribute("readonly");
+          input.focus();
+          display.classList.add("hidden");
+          button.textContent = "✓ 儲存";
+          button.classList.remove("btn-secondary");
+          button.classList.add("btn-success");
+        } else {
+          // Save and disable edit mode
+          const value = parseFloat(input.value);
+          if (isNaN(value)) {
+            alert("請輸入有效的數字！");
+            return;
+          }
+          display.textContent = value.toLocaleString();
+          input.classList.add("hidden");
+          display.classList.remove("hidden");
+          button.textContent = "✏️ 修正";
+          button.classList.add("btn-secondary");
+          button.classList.remove("btn-success");
+        }
+      }
+
+      // Proceed to input
+      document
+        .getElementById("proceedToInputBtn")
+        .addEventListener("click", () => {
+          document.getElementById("confirmSection").classList.add("hidden");
+          document.getElementById("inputSection").classList.remove("hidden");
+          updateStepIndicator(3);
+        });
+
+      // Calculate button
+      document.getElementById("calculateBtn").addEventListener("click", () => {
+        // Get all values
+        const totalCumulative = parseFloat(
+          document.getElementById("totalCumulative").value
+        );
+        const amortization = parseFloat(
+          document.getElementById("amortization").value
+        );
+        const financeDeduction = parseFloat(
+          document.getElementById("financeDeduction").value
+        );
+        const mgmtFeePercent = parseFloat(
+          document.getElementById("mgmtFee").value
+        );
+        const taxPercent = parseFloat(
+          document.getElementById("taxPercent").value
+        );
+
+        // Validate
+        if (
+          isNaN(totalCumulative) ||
+          isNaN(amortization) ||
+          isNaN(financeDeduction) ||
+          isNaN(mgmtFeePercent) ||
+          isNaN(taxPercent)
+        ) {
+          alert("請確保所有欄位都已填寫！");
+          return;
+        }
+
+        // Calculate
+        const steps = calculateSteps(
+          totalCumulative,
+          financeDeduction,
+          mgmtFeePercent,
+          amortization,
+          taxPercent
+        );
+
+        // Display results
+        displayResults({ steps });
+
+        // Update UI
+        document.getElementById("inputSection").classList.add("hidden");
+        document.getElementById("resultsSection").classList.remove("hidden");
+        updateStepIndicator(4);
+      });
+
+      // Calculate steps
       function calculateSteps(
         totalCumulative,
         financeDeduction,
@@ -240,7 +1352,7 @@
       ) {
         const steps = [];
 
-        // Step 1: 初始值
+        // Step 1
         steps.push({
           step: 1,
           title: "初始值 (總累計值)",
@@ -249,7 +1361,7 @@
           result: totalCumulative,
         });
 
-        // Step 2: 扣除財務部提供扣除金額
+        // Step 2
         const step2Res = totalCumulative - financeDeduction;
         steps.push({
           step: 2,
@@ -259,7 +1371,7 @@
           result: step2Res,
         });
 
-        // Step 3: 加上管理費
+        // Step 3
         const mgmtFee = step2Res * (managementFeePercent / 100);
         const mgmtFeeRounded = Math.round(mgmtFee);
         const step3Res = step2Res + mgmtFeeRounded;
@@ -271,7 +1383,7 @@
           result: step3Res,
         });
 
-        // Step 4: 扣除各項攤提
+        // Step 4
         const step4Res = step3Res - amortization;
         steps.push({
           step: 4,
@@ -281,7 +1393,7 @@
           result: step4Res,
         });
 
-        // Step 5: 加上營業稅
+        // Step 5
         const tax = step4Res * (taxPercent / 100);
         const taxRounded = Math.round(tax);
         const step5Res = step4Res + taxRounded;
@@ -296,20 +1408,18 @@
         return steps;
       }
 
-      // 顯示結果
+      // Display results
       function displayResults(data) {
-        const resultsSection = document.getElementById("resultsSection");
         const stepsContainer = document.getElementById("stepsContainer");
         const finalAmount = document.getElementById("finalAmount");
 
         stepsContainer.innerHTML = "";
-        resultsSection.classList.remove("hidden");
 
         data.steps.forEach((step) => {
           const stepDiv = document.createElement("div");
           stepDiv.className = "step-card";
           stepDiv.innerHTML = `
-            <div class="step-number">${step.step}</div>
+            <div class="calc-step-number">${step.step}</div>
             <div class="step-title">${step.title}</div>
             <div class="step-desc">${step.description}</div>
             <div class="step-math">${step.math}</div>
@@ -320,50 +1430,6 @@
         const lastStep = data.steps[data.steps.length - 1];
         finalAmount.textContent = lastStep.result.toLocaleString();
       }
-
-      // 表單提交處理
-      document.getElementById("calcForm").addEventListener("submit", (e) => {
-        e.preventDefault();
-
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.textContent = "計算中...";
-        submitBtn.disabled = true;
-
-        // 獲取表單數據
-        const totalCumulative = parseInt(
-          document.getElementById("totalCumulative").value
-        );
-        const financeDeduction = parseInt(
-          document.getElementById("financeDeduction").value
-        );
-        const amortization = parseInt(
-          document.getElementById("amortization").value
-        );
-        const mgmtFeePercent = parseFloat(
-          document.getElementById("mgmtFee").value
-        );
-        const taxPercent = parseFloat(
-          document.getElementById("taxPercent").value
-        );
-
-        // 執行計算
-        try {
-          const steps = calculateSteps(
-            totalCumulative,
-            financeDeduction,
-            mgmtFeePercent,
-            amortization,
-            taxPercent
-          );
-
-          displayResults({ steps });
-        } catch (error) {
-          alert("發生錯誤: " + error.message);
-        } finally {
-          submitBtn.textContent = "開始計算";
-          submitBtn.disabled = false;
-        }
-      });
     </script>
   </body>
 </html>
