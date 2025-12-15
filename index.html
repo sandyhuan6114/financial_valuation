@@ -649,6 +649,9 @@
             <div class="amount" id="finalAmount">-</div>
           </div>
           <div class="actions">
+            <button class="btn-secondary" onclick="goBackToConfirm()">
+              ⬅️ 返回確認數據
+            </button>
             <button class="btn-secondary" onclick="location.reload()">
               🔄 重新開始
             </button>
@@ -692,6 +695,14 @@
             stepInd.classList.add("active");
           }
         }
+      }
+
+      // Go back to confirm section from results page
+      function goBackToConfirm() {
+        document.getElementById("resultsSection").classList.add("hidden");
+        document.getElementById("inputSection").classList.add("hidden");
+        document.getElementById("confirmSection").classList.remove("hidden");
+        updateStepIndicator(2);
       }
 
       // File upload handling
